@@ -27,7 +27,7 @@ public class LockManager {
         long startTime = System.currentTimeMillis();
         while (!acquire(trxId, pageId, permissions)) {
             if (System.currentTimeMillis() > timeout + startTime)
-                throw new TransactionAbortedException();
+                throw new TransactionAbortedException(); //abort
         }
         return true;
     }

@@ -7,7 +7,9 @@ course portal: http://dsg.csail.mit.edu/6.830/
 - [x] lab1
 - [x] lab2
 - [x] lab3
-- [ ] lab4
+- [x] lab4
+- [x] lab5
+- [ ] lab6
 
 
 
@@ -73,3 +75,9 @@ if (modCount != expectedModCount)
 ```
 
 这个报错参考了：[这里](https://blog.csdn.net/weixin_38802600/article/details/108622827)，讲到了导致的原因和解决方案，关键就是在遍历的同时修改了modCount。
+
+
+
+## Lab5
+
+`BTreeInternalPage#deleteEntry`是个很重要的方法，需要解读一下。

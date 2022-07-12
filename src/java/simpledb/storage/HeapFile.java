@@ -120,22 +120,21 @@ public class HeapFile implements DbFile {
             throws DbException, IOException, TransactionAbortedException {
         // some code goes here
         BufferPool bufferPool =Database.getBufferPool();
-        HeapPage page;
         for (int i = 0; i < numPages(); i++) {
-            page = (HeapPage)bufferPool.getPage(tid, new HeapPageId(tableId, i), Permissions.READ_WRITE);
+            HeapPage page = (HeapPage)bufferPool.getPage(tid, new HeapPageId(tableId, i), Permissions.READ_WRITE);
             if (page.getNumEmptySlots() != 0) {
                 page.insertTuple(t);
-                // TODO: 2022/7/5
-//                writePage(page); //apply
                 return Collections.singletonList(page);
             }
         }
         // 不能在现有page中找到slot，需要新创建一个page并进行insert
-        page = new HeapPage(new HeapPageId(tableId, numPages()), HeapPage.createEmptyPageData());
-        page.insertTuple(t);
-        // TODO: 2022/7/5
-        writePage(page); //apply
-        return Collections.singletonList(page);
+        HeapPage newPage = new HeapPage(new HeapPageId(tableId, numPages()), HeapPage.createEmptyPageData());
+        //todo writePage在这里调用应该就不会出现在事务提交前就写入的情况，因为这里写入的其实是一个emptyPageData
+        // 下边的insertTuple其实只改变了这个page在内存中的状态，并没进行刷盘。
+        // 其实下边这些操作都是因为如TransactionTest的要求，里边的setUp方法需要初始化三个new page
+        writePage(newPage); //apply
+        newPage.insertTuple(t);
+        return Collections.singletonList(newPage);
         // not necessary for lab1
     }
 
@@ -149,8 +148,6 @@ public class HeapFile implements DbFile {
         RecordId recordId = t.getRecordId();
         HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, recordId.getPageId(), Permissions.READ_WRITE);
         page.deleteTuple(t);
-        // TODO: 2022/7/5
-//        writePage(page); //apply
 
         ArrayList<Page> pages = new ArrayList<>();
         pages.add(page);

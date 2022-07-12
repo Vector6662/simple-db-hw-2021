@@ -45,20 +45,19 @@ GitHub repository:
 
 Take a look at `index/` and `BTreeFile.java`. This is the core file for the implementation of
 the B+Tree and where you will write all your code for this lab. Unlike the
-HeapFile, the BTreeFile consists of four different kinds of pages. As you would
+HeapFile, the BTreeFile consists of **four different kinds of pages**. As you would
 expect, there are two different kinds of pages for the nodes of the tree:
-internal pages and leaf pages. Internal pages are implemented in
+**internal pages and leaf pages**. Internal pages are implemented in
 `BTreeInternalPage.java`, and leaf pages are implemented in
 `BTreeLeafPage.java`. For convenience, we have created an abstract class in
 `BTreePage.java` which contains code that is common to both leaf and internal
 pages. In addition, header pages are implemented in `BTreeHeaderPage.java` and
-keep track of which pages in the file are in use. Lastly, there is one page at
-the beginning of every BTreeFile which points to the root page of the tree and
-the first header page. This singleton page is implemented in
+**keep track of which pages in the file are in use**. Lastly, there is one page at
+the beginning of every BTreeFile which **points to the root page of the tree and**
+**the first header page**. This **singleton** page is implemented in
 `BTreeRootPtrPage.java`. Familiarize yourself with the interfaces of these
 classes, especially `BTreePage`, `BTreeInternalPage` and `BTreeLeafPage`. You
 will need to use these classes in your implementation of the B+Tree.
-
 
 Your first job is to implement the `findLeafPage()` function in
 `BTreeFile.java`. This function is used to find the appropriate leaf page given
@@ -69,28 +68,27 @@ pointers. Given a value of 1, this function should return the first leaf page.
 Likewise, given a value of 8, this function should return the second page. The
 less obvious case is if we are given a key value of 6.  There may be duplicate
 keys, so there could be 6's on both leaf pages. In this case, the function
-should return the first (left) leaf page.
+should return the first (left) leaf page.（相等返回的是左边的叶子节点）
 
 <p align="center"> <img width=500 src="simple_tree.png"><br> <i>Figure 1: A
 simple B+ Tree with duplicate keys</i> </p>
 
 
 Your `findLeafPage()` function should recursively search through internal nodes
-until it reaches the leaf page corresponding to the provided key value. In order
+**until it reaches the leaf page** corresponding to the provided key value. In order
 to find the appropriate child page at each step, you should iterate through the
 entries in the internal page and compare the entry value to the provided key
 value. `BTreeInternalPage.iterator()` provides access to the entries in the
 internal page using the interface defined in `BTreeEntry.java`. This iterator
 allows you to iterate through the key values in the internal page and access the
-left and right child page ids for each key.  The base case of your recursion
+left and right child page ids for each key.  **The base case** of your recursion
 happens when the passed-in BTreePageId has `pgcateg()` equal to
 `BTreePageId.LEAF`, indicating that it is a leaf page.  In this case, you should
 just fetch the page from the buffer pool and return it.  You do not need to
 confirm that it actually contains the provided key value f.
 
-
-Your `findLeafPage()` code must also handle the case when the provided key value
-f is null.  If the provided value is null, recurse on the left-most child every
+Your `findLeafPage()` code must also handle the case **when the provided key value**
+**f is null**.  If the provided value is null, recurse on the left-most child every
 time in order to find the left-most leaf page. Finding the left-most leaf page
 is useful for scanning the entire file. Once the correct leaf page is found, you
 should return it.  As mentioned above, you can check the type of page using the
@@ -105,9 +103,8 @@ an extra argument to track the list of dirty pages.  This function will be
 important for the next two exercises in which you will actually update the data
 and therefore need to keep track of dirty pages.
 
-
 Every internal (non-leaf) page your `findLeafPage()` implementation visits
-should be fetched with READ_ONLY permission, except the returned leaf page,
+should be fetched with **READ_ONLY permission**, except the returned leaf page,
 which should be fetched with the permission provided as an argument to the
 function.  These permission levels will not matter for this lab, but they will
 be important for the code to function correctly in future labs.
@@ -118,7 +115,6 @@ be important for the code to function correctly in future labs.
 
 
 Implement `BTreeFile.findLeafPage()`.
-
 
 After completing this exercise, you should be able to pass all the unit tests
 in `BTreeFileReadTest.java` and the system tests in `BTreeScanTest.java`.
@@ -135,37 +131,38 @@ find the correct leaf page into which we should insert the tuple. However, each
 page has a limited number of slots and we need to be able to insert tuples even
 if the corresponding leaf page is full.
 
-
 As described in the textbook, attempting to insert a tuple into a full leaf page
-should cause that page to split so that the tuples are evenly distributed
-between the two new pages. Each time a leaf page splits, a new entry
-corresponding to the first tuple in the second page will need to be added to the
-parent node. Occasionally, the internal node may also be full and unable to
+should cause that page to **split** so that the tuples are evenly distributed
+between the two new pages. **Each time a leaf page splits, a new entry**
+**corresponding to the first tuple in the second page will need to be added to the**
+**parent node.** Occasionally, the internal node may also be full and unable to
 accept new entries. In that case, the parent should split and add a new entry to
 its parent. This may cause recursive splits and ultimately the creation of a new
 root node.
 
+每一次leaf page分裂时，第二个page的第一个tuple对应的entry需要被添加到父节点
+非叶子节点也可能会因为满了而不能加入新entry，此时便需要分裂，加入新entry到其父节点
 
 In this exercise you will implement `splitLeafPage()` and `splitInternalPage()`
-in `BTreeFile.java`. If the page being split is the root page, you will need to
-create a new internal node to become the new root page, and update the
-BTreeRootPtrPage. Otherwise, you will need to fetch the parent page with
+in `BTreeFile.java`. **If the page being split is the root page, you will need to**
+**create a new internal node to become the new root page, and update the**
+**BTreeRootPtrPage**. （这是base case？）Otherwise, you will need to fetch the parent page with
 READ_WRITE permissions, recursively split it if necessary, and add a new entry.
 You will find the function `getParentWithEmptySlots()` extremely useful for
-handling these different cases.  In `splitLeafPage()` you should "copy" the key
-up to the parent page, while in `splitInternalPage()` you should "push" the key
+handling these different cases.  In `splitLeafPage()` you should "**copy**" the key
+up to the parent page, while in `splitInternalPage()` you should "**push**" the key
 up to the parent page. See Figure 2 and review section 10.5 in the text book if
 this is confusing. Remember to update the parent pointers of the new pages as
 needed (for simplicity, we do not show parent pointers in the figures). When an
 internal node is split, you will need to update the parent pointers of all the
 children that were moved. You may find the function `updateParentPointers()`
 useful for this task. Additionally, remember to update the sibling pointers of
-any leaf pages that were split. Finally, return the page into which the new
-tuple or entry should be inserted, as indicated by the provided key field.
+any leaf pages that were split. **Finally, return the page into which the new**
+**tuple or entry should be inserted**, as indicated by the provided key field.
 (Hint: You do not need to worry about the fact that the provided key may
 actually fall in the exact center of the tuples/entries to be split.  You should
 ignore the key during the split, and only use it to determine which of the two
-pages to return.)
+pages to return. 额…不是很理解，为啥就不用担心这一点呢)
 
 <p align="center"> <img width=500 src="splitting_leaf.png"><br> <img width=500
 src="splitting_internal.png"><br> <i>Figure 2: Splitting pages</i> </p>
@@ -185,28 +182,30 @@ especially useful for moving a subset of tuples/entries from a page to its right
 sibling.
 
 As mentioned above, the internal page iterators use the interface defined in
-`BTreeEntry.java`, which has one key and two child pointers.  It also has a
+`BTreeEntry.java`, **which has one key and two child pointers**.  It also has a
 recordId, which identifies the location of the key and child pointers on the
 underlying page.  We think working with one entry at a time is a natural way to
 interact with internal pages, but it is important to keep in mind that the
-underlying page does not actually store a list of entries, but stores ordered
-lists of *m* keys and *m*+1 child pointers.  Since the `BTreeEntry` is just an
-interface and not an object actually stored on the page, updating the fields of
-`BTreeEntry` will not modify the underlying page.  In order to change the data
+underlying page does not actually store a list of entries, ==but stores ordered
+lists of *m* keys and *m*+1 child pointers==.  **Since the `BTreeEntry` is just an**
+**interface and not an object actually stored on the page, updating the fields of**
+**`BTreeEntry` will not modify the underlying page.**  In order to change the data
 on the page, you need to call `BTreeInternalPage.updateEntry()`.  Furthermore,
 deleting an entry actually deletes only a key and a single child pointer, so we
 provide the funtions `BTreeInternalPage.deleteKeyAndLeftChild()` and
 `BTreeInternalPage.deleteKeyAndRightChild()` to make this explicit.  The entry's
 recordId is used to find the key and child pointer to be deleted. Inserting an
 entry also only inserts a key and single child pointer (unless it's the first
-entry), so `BTreeInternalPage.insertEntry()` checks that one of the child
+entry), so `BTreeInternalPage.insertEntry()` checks **that** one of the child
 pointers in the provided entry overlaps an existing child pointer on the page,
-and that inserting the entry at that location will keep the keys in sorted
+and **that** inserting the entry at that location will keep the keys in **sorted**
 order.
 
-In both `splitLeafPage()` and `splitInternalPage()`, you will need to update the
-set of `dirtypages` with any newly created pages as well as any pages modified
-due to new pointers or new data. This is where `BTreeFile.getPage()` will come
+（BTreeEntry只是封装类，要对internal page中的**真实**entry进行修改，需要调用上边提到的方法）
+
+<u>In both `splitLeafPage()` and `splitInternalPage()`, you will need to update the</u>
+<u>set of `dirtypages` with any newly created pages as well as any pages modified</u>
+<u>due to new pointers or new data</u>（需要将修改、新增的page更新到dirtyPage中）. This is where `BTreeFile.getPage()` will come
 in handy.  Each time you fetch a page, `BTreeFile.getPage()` will check to see
 if the page is already stored in the local cache (`dirtypages`), and if it can't
 find the requested page there, it fetches it from the buffer pool.
@@ -216,7 +215,7 @@ One advantage of this approach is that it prevents loss of updates if the same
 pages are accessed multiple times during a single tuple insertion or deletion.
 
 Note that in a major departure from `HeapFile.insertTuple()`,
-`BTreeFile.insertTuple()` could return a large set of dirty pages, especially if
+`BTreeFile.insertTuple()` could return **a large set of dirty pages**, especially if
 any internal pages are split. As you may remember from previous labs, the set of
 dirty pages is returned to prevent the buffer pool from evicting dirty pages
 before they have been flushed.
@@ -281,8 +280,8 @@ duplicate tuples and next key locking. -->
 ## 4. Delete
 
 In order to keep the tree balanced and not waste unnecessary space, deletions in
-a B+Tree may cause pages to redistribute tuples (Figure 3) or, eventually, to
-merge (see Figure 4). You may find it useful to review section 10.6 in the
+a B+Tree may cause pages to **redistribute** tuples (Figure 3) or, eventually, to
+**merge** (see Figure 4). You may find it useful to review section 10.6 in the
 textbook.
 
 <p align="center"> <img width=500 src="redist_leaf.png"><br> <img width=500
@@ -290,13 +289,12 @@ src="redist_internal.png"><br> <i>Figure 3: Redistributing pages</i> </p>
 
 <p align="center"> <img width=500 src="merging_leaf.png"><br> <img width=500
 src="merging_internal.png"><br> <i>Figure 4: Merging pages</i> </p>
-
 As described in the textbook, attempting to delete a tuple from a leaf page that
-is less than half full should cause that page to either steal tuples from one of
-its siblings or merge with one of its siblings.  If one of the page's siblings
-has tuples to spare, the tuples should be evenly distributed between the two
+is **less than half full** should cause that page to either **steal** tuples from one of
+its siblings or **merge** with one of its siblings.  1️⃣If one of the page's siblings
+has tuples to spare, the tuples should be **evenly(均匀的)** distributed between the two
 pages, and the parent's entry should be updated accordingly (see Figure 3).
-However, if the sibling is also at minimum occupancy, then the two pages should
+However, 2️⃣if the sibling is also at minimum occupancy, then the two pages should
 merge and the entry deleted from the parent (Figure 4). In turn, deleting an
 entry from the parent may cause the parent to become less than half full. In
 this case, the parent should steal entries from its siblings or merge with a
@@ -312,10 +310,10 @@ key field in the parent (look carefully at how this is done in Figure 3 - keys
 are effectively "rotated" through the parent).  In
 `stealFromLeftInternalPage()`/`stealFromRightInternalPage()`, you will also need
 to update the parent pointers of the children that were moved. You should be
-able to reuse the function `updateParentPointers()` for this purpose.
+able to reuse the function `updateParentPointers()` for this pur	pose.
 
 In `mergeLeafPages()` and `mergeInternalPages()` you will implement code to
-merge pages, effectively performing the inverse of `splitLeafPage()` and
+merge pages, effectively performing the inverse(相反) of `splitLeafPage()` and
 `splitInternalPage()`.  You will find the function `deleteParentEntry()`
 extremely useful for handling all the different recursive cases.  Be sure to
 call `setEmptyPage()` on deleted pages to make them available for reuse.  As
