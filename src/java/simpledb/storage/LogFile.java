@@ -5,9 +5,12 @@ import simpledb.common.Database;
 import simpledb.transaction.TransactionId;
 import simpledb.common.Debug;
 
+import javax.xml.crypto.Data;
 import java.io.*;
 import java.util.*;
 import java.lang.reflect.*;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /*
 LogFile implements the recovery subsystem of SimpleDb.  This class is
@@ -53,7 +56,7 @@ records are variable length.
 transaction id.
 
 <li> Each log record ends with a long integer file offset representing
-the position in the log file where the record began.
+ the position in the log file where the record began.
 
 <li> There are five record types: ABORT, COMMIT, UPDATE, BEGIN, and
 CHECKPOINT
@@ -460,6 +463,25 @@ public class LogFile {
             synchronized(this) {
                 preAppend();
                 // some code goes here
+                /*
+                * 从file结尾往前遍历，因为每一个log record的结束是一个8字节，用来记录每一个log record的开始offset
+                * 这样就可以避免处理checkpoint这类不知道具体大小的record了
+                * */
+                long start = tidToFirstLogRecord.get(tid.getId());
+                raf.seek(raf.length()-8);//移动到上一个record的最后8字节，此位置记录了每个record的开始位置
+                long offset = raf.readLong();//读取每一个record的开始位置
+                while(offset>start){
+                    raf.seek(offset);//start of each log record
+                    int type = raf.readInt();
+                    long transactionId = raf.readLong();
+                    if(tid.getId() == transactionId && type == UPDATE_RECORD) {
+                        Page beforeImage = readPageData(raf);
+                        Database.getBufferPool().discardPage(beforeImage.getId());
+                        Database.getCatalog().getDatabaseFile(beforeImage.getId().getTableId()).writePage(beforeImage);//rollback and persist
+                    }
+                    raf.seek(offset-8);
+                    offset = raf.readLong();
+                }
             }
         }
     }
@@ -487,6 +509,55 @@ public class LogFile {
             synchronized (this) {
                 recoveryUndecided = false;
                 // some code goes here
+                raf.seek(0);//log file最开始的位置记录了last checkpoint的位置
+                long lastCp = raf.readLong(); // last checkpoint
+                if (lastCp == NO_CHECKPOINT_ID) lastCp = 8;//没有checkpoint
+
+                Stack<Long> offsets = new Stack<>();
+                raf.seek(raf.length() - 8);
+                long offset = raf.readLong();
+                while(offset >= lastCp){
+                    //和rollback一样从后往前遍历，开始位置是checkpoint，也就是这里的lastCp变量
+                    offsets.push(offset);
+                    raf.seek(offset-8);
+                    offset = raf.readLong();
+                }
+                //用到了栈，此时遍历的方向就是从前往后了
+                while(!offsets.empty()) {
+                    offset = offsets.pop();
+                    raf.seek(offset);
+                    int type = raf.readInt();
+                    long trxId = raf.readLong();
+                    switch (type){
+                        case ABORT_RECORD:
+                            break;
+                        case COMMIT_RECORD:
+                            tidToFirstLogRecord.remove(trxId);//losers集合
+                            break;
+                        case BEGIN_RECORD:
+                            //tidToFirstLogRecord记录的应该是事务首次出现的record的位置
+                            if (!tidToFirstLogRecord.containsKey(trxId))
+                                tidToFirstLogRecord.put(trxId, offset);
+                            break;
+                        case UPDATE_RECORD://redo
+                            readPageData(raf);
+                            Page afterImage = readPageData(raf);
+                            Database.getCatalog().getDatabaseFile(afterImage.getId().getTableId()).writePage(afterImage);
+                            break;
+                        case CHECKPOINT_RECORD:
+                            int nTrxs = raf.readInt();
+                            for (int i = 0; i < nTrxs; i++) {
+                                long trx = raf.readLong();//record transaction id
+                                long off = raf.readLong();//offset
+                                tidToFirstLogRecord.put(trx, off);//add losers
+                            }
+                            break;
+                    }
+                }
+                //rollback losers
+                for(Long loser : tidToFirstLogRecord.keySet()){
+                    rollback(new TransactionId(loser));
+                }
             }
          }
     }

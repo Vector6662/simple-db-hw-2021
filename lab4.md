@@ -90,7 +90,7 @@ recovery in this lab, since you will never need to **undo** any work (**you neve
 **dirty pages**) and you will never need to **redo** any work (**you force**
 **updates on commit and will not crash during commit processing**).
 
-（不考虑undo，甚至不考虑redo，感觉这里简化了好多啊）
+（这节lab中不考虑undo，甚至不考虑redo，感觉这里简化了好多啊）
 
 ###  2.4. Granting Locks
 

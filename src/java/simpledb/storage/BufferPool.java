@@ -7,6 +7,7 @@ import simpledb.transaction.LockManager;
 import simpledb.transaction.TransactionAbortedException;
 import simpledb.transaction.TransactionId;
 
+import javax.xml.crypto.Data;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -265,9 +266,25 @@ public class BufferPool {
     private synchronized void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
-        DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+        /*
+        * 可以看到最后一行直接会将page给落盘，不会等到事务提交，这也就是STEAL
+        * 为了保证一致性，本课程的实现没有采用undo log，而是采用了before-image和after-image。
+        * 调用的是下边logWrite()方法。回滚的时候就用before-image来覆盖之前磁盘中相应的page
+        * 注意这个代码里边，虽然追加了log，也STEAL了page，都是写磁盘了的，也就是都持久化了的，
+        * 但是事务还没有提交的！需要调用transactionComplete(true)之后才会提交事务，该方法内部会调用
+        * logFile的logCommit方法，其中第一行就是raf.writeInt(COMMIT_RECORD);即写下COMMIT记录，
+        * 这个时候才表明事务已经提交了
+        * */
         Page page = bufferedPages.get(pid);
+        TransactionId dirtier = page.isDirty();
+        //写日志
+        if (dirtier != null) {
+            Database.getLogFile().logWrite(dirtier, page.getBeforeImage(), page);//UPDATE类型的记录
+            Database.getLogFile().force();
+        }
+        //steal
         page.markDirty(false, null);
+        DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
         dbFile.writePage(page);
     }
 
@@ -277,7 +294,12 @@ public class BufferPool {
         // some code goes here
         // not necessary for lab1|lab2
         for (Page page : bufferedPages.values()) {
-            if (page.isDirty() == tid) flushPage(page.getId());
+            if (page.isDirty() == tid) {
+                /*此时磁盘中的这个page和buffer pool中相对应的并不相同，也就是脏数据。所以每一个HeapPage里边都有一个byte数组:oldData，
+                * 用来记录之前的数据，也就是before-image。更新这个before-image的时机是update的时候，这里flushPages也在这个流程中*/
+                page.setBeforeImage();
+                flushPage(page.getId());
+            }
         }
     }
 

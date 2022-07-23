@@ -13,6 +13,10 @@ public class TransactionId implements Serializable {
     static final AtomicLong counter = new AtomicLong(0);
     final long myid;
 
+    public TransactionId(long myid){
+    	this.myid = myid;
+	}
+
     public TransactionId() {
         myid = counter.getAndIncrement();
     }

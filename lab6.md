@@ -14,21 +14,23 @@ the contents of the log file.
 The logging code we provide generates records intended for
 physical whole-page undo and
 redo. When a page is first read in, our code remembers the original
-content of the page as a before-image. When a transaction updates a
-page, the corresponding log record contains that remembered
-before-image as well as the content of the page after modification as
-an after-image. You'll use the before-image to roll back during aborts
+content of the page as a before-image. **When a transaction updates a**
+**page, the corresponding log record contains that remembered**
+**before-image as well as the content of the page after modification as**
+**an after-image.** You'll use the **before-image to roll back** during aborts
 and to undo loser transactions during recovery, and the after-image to
 redo winners during recovery.
 
-We are able to get away with doing whole-page physical UNDO (while
+（UPDATE记录存了before-image和after-image，分别用来回滚和recover）
+
+We are able to get away with（侥幸逃脱） doing whole-page physical UNDO (while
 ARIES must do logical UNDO) because we are doing page level locking
 and because we have no indices which may have a different structure at
 UNDO time than when the log was initially written.  The reason
 page-level locking simplifies things is that if a transaction modified
-a page, it must have had an exclusive lock on it, which means no other
+a page, **it must have had an exclusive lock on it**, which means no other
 transaction was concurrently modifying it, so we can UNDO changes to
-it by just overwriting the whole page.
+it **by just overwriting the whole page**.
 
 Your BufferPool already implements abort by deleting dirty pages, and
 pretends to implement atomic commit by forcing dirty pages to disk
@@ -68,13 +70,14 @@ Here's what to do:
     ```
   This causes the logging system to write an update to the log.  
   We force the log to ensure
-  the log record is on disk before the page is written to disk.
+  **the log record is on disk before the page is written to disk.**（REDO，实现recovery）
 
 
 2. Your `BufferPool.transactionComplete()` calls `flushPage()`
    for each page that a committed transaction dirtied. For each such
    page, add a call to `p.setBeforeImage()` after you have flushed
    the page:
+   
    ```
    // use current page contents as the before-image
    // for the next transaction that modifies this page.
@@ -131,7 +134,6 @@ You should see in `LogFile.java` a set of functions, such as
 `logCommit()`, that generate each kind of log record and append
 it to the log.
 
-
 Your first job is to implement the `rollback()` function in
 `LogFile.java`. This function is called when a transaction aborts,
 before the transaction releases its locks. Its job is to un-do any
@@ -159,7 +161,6 @@ method useful for displaying the current contents of the log.
 
 
 Implement LogFile.rollback().
-
 
 After completing this exercise, you should be able to pass the
 TestAbort and
@@ -195,7 +196,6 @@ called before any new transactions start. Your implementation should:
 
 
 Implement LogFile.recover().
-
 
 After completing this exercise, you should be able to pass all
 of the LogTest system test.

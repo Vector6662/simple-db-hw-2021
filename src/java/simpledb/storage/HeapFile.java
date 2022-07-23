@@ -180,7 +180,6 @@ public class HeapFile implements DbFile {
 
         @Override
         public void open() throws DbException, TransactionAbortedException {
-            // todo 是否需要保证open和close的幂等
             if (isOpen) return;
             isOpen = true;
             curPageNo = 0;//从0开始计数,所以有效的下标应该是[0,numPages()-1]
@@ -201,6 +200,13 @@ public class HeapFile implements DbFile {
             }
         }
 
+        /**
+         * // 火山模型实现的关键，每次只加载一个页面的数据到内存，当一个页面的tuples遍历完后，再将下一个页面的加载进来
+         * @return
+         * @throws DbException
+         * @throws TransactionAbortedException
+         * @throws NoSuchElementException
+         */
         @Override
         public Tuple next() throws DbException, TransactionAbortedException, NoSuchElementException {
             if (!isOpen)

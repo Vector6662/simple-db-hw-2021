@@ -9,7 +9,7 @@ course portal: http://dsg.csail.mit.edu/6.830/
 - [x] lab3
 - [x] lab4
 - [x] lab5
-- [ ] lab6
+- [x] lab6（9/10）
 
 
 
@@ -38,6 +38,12 @@ Operators：lab1的最后一个exercise涉及了一下，算是承上启下。Se
 
 
 ## lab2
+
+实现一个查询引擎，这里具体实现的是火山模型/迭代模型，可以参考这里：[「分布式技术专题」三种常见的数据库查询引擎执行模型](http://blog.itpub.net/69982626/viewspace-2756672/)。
+
+> 该计算模型将关系代数中每一种操作抽象为一个 **Operator**，将整个 SQL 构建成一个 Operator 树，查询树**自顶向下**的调用next()接口，数据则自底向上的被拉取处理。
+
+HeapFile下边的Iter类是数据来源，实现也稍微有点繁琐，主要为了达到的目的是，**每次只加载一个page的数据**。当一个页面的tuples被遍历完毕后，再加载下一个页面。
 
 实现其他的Operator，顶级的Operator是SeqScan，而这个方法只是简单的封装了一下DBFile的DbFileIterator。次一级的是Predicate的JoinPredicate，这是两个Comparator，分别对应Filter和Join，这是两个具体的Operator。
 
@@ -81,3 +87,51 @@ if (modCount != expectedModCount)
 ## Lab5
 
 `BTreeInternalPage#deleteEntry`是个很重要的方法，需要解读一下。
+
+
+
+
+
+## Lab 6
+
+我觉得实现的是STEAL+FORCE，但是这一点文档中好像没有明确说明，如果是NO-STEAL的话应该还会有一个undo log，然而这个lab中并没有。
+
+关注提交(commit)流程应该是这个lab的重点，整个commit过程的起点是`Transaction#transactionComplete()`方法。里边分别会调用buffer pool的transactionComplete方法，和LogFile的logCommit方法。
+
+buffer pool的transactionComplete方法用来完成刷盘，以tid为单位刷盘，调用flushPages方法。
+
+对于一个UPDATE类型的log record，关键的代码是（`BufferPool#flushPage(PageId pid)`）：
+
+```java
+Database.getLogFile().logWrite(dirtier, page.getBeforeImage(), page);//tid, before-image, after-image
+```
+
+这里我觉得是整个实现设计非常秒的地方，在日志中同时记录了before-image和after-image，只需要一个logFile便可以同时支持回滚和recover。
+
+而STEAL体现在接下来的代码，事务还没有提交，即还没有在LogFile中追加上COMMIT类型的log record前，就把这个buffer pool中的dirty page给落盘了。
+
+```java
+//steal
+page.markDirty(false, null);
+DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+dbFile.writePage(page);
+```
+
+LogFile的logCommit方法其实非常简单，只是在log file中追加一条COMMIT类型的记录即可。
+
+
+
+这个lab的代码量应该是最少的，但也是打脑壳的。只需要实现logFile中rollback和recover方法。
+
+rollback的实现一个很重要的技巧，从log file的结尾往前遍历更为简单，这是log record的数据格式决定的，在LogFile的最开始的说明中有讲到：
+
+>Each log record **ends with** a long integer file offset representing the position in the log file where the record began.
+
+具体rollback的方式就比较简单了，用UPDATE记录中的before-image来替换对于的page即可。
+
+目前还没有完成通过测试（9/10），但是还早不到原因。
+
+
+
+
+
