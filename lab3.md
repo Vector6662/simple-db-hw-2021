@@ -60,9 +60,15 @@ steps are given in Section 2 below.
 Recall that the main idea of a cost-based optimizer is to:
 
 *  Use statistics about tables to estimate "costs" of different
-   query plans.  Typically, the cost of a plan is related to the  cardinalities of
-   (number of tuples produced by) intermediate joins and selections, as well as the
-   selectivity of filter and join predicates.
+   query plans.  Typically, **the cost of a plan is related to the  cardinalities of**
+   **(number of tuples produced by) intermediate joins and selections, as well as the**
+   **selectivity of filter and join predicates.**
+   
+   通常来讲，（查询）计划的成本与这些有关系：
+   
+   1. 中间连接（join）和选择（selection）所产生的tuples(这里称作cardinality)；
+   2. 过滤器（filter）和连接谓词（join predicate）的选择（selectivity）；
+
 *  Use these statistics to order joins and selections in an
    optimal way, and to select the best implementation for join
    algorithms from amongst several alternatives.
@@ -75,6 +81,7 @@ to review the <a href="https://github.com/MIT-DB-Class/simple-db-hw-2021/blob/ma
 before starting this lab.  Briefly, if you have a catalog file
 <tt>catalog.txt</tt> describing your tables, you can run the parser by
 typing:
+
 ```
 java -jar dist/simpledb.jar parser catalog.txt
 ```
@@ -108,7 +115,6 @@ the basic operation is as follows:
     represents the parsed query. <tt>parseQuery</tt> then calls the method <tt>physicalPlan</tt> on the
     <tt>LogicalPlan</tt> instance it has constructed.  The <tt>physicalPlan</tt> method returns a
     <tt>DBIterator</tt> object that can be used to actually run the query.
-    
 
 In the exercises to come, <u>you will implement the methods that help</u>
 <u><tt>physicalPlan</tt> devise an optimal plan.</u>（实现一些方法，帮助physicalPlan想出一个最优的plan）
@@ -169,26 +175,25 @@ joincost(t1 join t2) = scancost(t1) + ntups(t1) x scancost(t2) //IO cost
 
 Here, `ntups(t1)` is the number of tuples in table t1.
 
-（
-
 `scancost(t1)`：扫面一次table1，得到所有的tuples；
 `ntups(t1) x scancost(t2)`：t1中每一个tuple都要和t2中的所有tuple都比较一次，又不考虑cache(buffer pool)，于是每一次遍历t2都要进行IO；
 `ntups(t1) x ntups(t2)`：每次读取t2后，与一个t1中的tuple比较，即进行join操作。
-
-）
 
 ####  2.2.3 Filter Selectivity
 
 `ntups` can be directly computed for a base table by
 scanning that table.  Estimating `ntups` for a table with
 one or more selection predicates over it can be trickier --
-this is the *filter selectivity estimation* problem.  Here's one
+this is the ==*filter selectivity estimation*== problem.  Here's one
 approach that you might use, based on computing a histogram over the
 values in the table:
 
+如果一个表有多个选择谓词（selection predicate，如>=, <, ==），那么估计一个表的ntups棘手一些—这是一个过滤器选择性估计（filter selectivity estimation）问题。
+
 *  Compute the minimum and maximum values for every attribute in the table (by scanning
    it once).	
-*  Construct a histogram for every attribute in the table. A simple
+   
+*  Construct a histogram for **every** attribute in the table. A simple
    approach is to use a fixed number of buckets *NumB*,
    with
    each bucket representing the number of records in a fixed range of the
@@ -196,9 +201,11 @@ values in the table:
    *f* ranges from 1 to 100, and there are 10 buckets, then bucket 1 might
    contain the count of the number of records between 1 and 10, bucket
    2 a count of the number of records between 11 and 20, and so on.
+   
 *  Scan the table again, selecting out all of fields of all of the
    tuples and using them to populate the counts of the buckets
    in each histogram.
+   
 *  To estimate the selectivity of an equality expression,
    *f=const*, compute the bucket that contains value *const*.
    Suppose the width (range of values) of the bucket is *w*, the height (number of
@@ -209,6 +216,9 @@ values in the table:
    expression is roughly *(h / w) / ntups*, since *(h/w)*
    represents the expected number of tuples in the bin with value
    *const*.
+   
+   f=const，f代表field，const指一个常数，如f=2。这里假设值在每一个bucket中是均匀分布（uniformly）的。
+   
 *  To estimate the selectivity of a range expression *f>const*,
    compute the
    bucket *b* that *const* is in, with width *w_b* and height
@@ -223,6 +233,7 @@ values in the table:
    *b_f* above).  Summing the selectivity contributions of all the
    buckets will yield the overall selectivity of the expression.
    Figure 2 illustrates this process.
+   
 *  Selectivity of expressions involving *less than* can be performed
    similar to the greater than case, looking at buckets down to 0.
 
@@ -318,17 +329,21 @@ While implementing your simple solution, you  should keep in mind the following:
 *  For **equality** joins, when one of the attributes is a primary key, the number of tuples produced by the join <u>cannot</u>
    <u>be larger than the cardinality of the non-primary key attribute</u>.（这一点想不清楚可以看[这里](https://www.nowcoder.com/practice/7e7bc361db6a4cb6aa35eefccfe75364?tpId=298&tags=&title=&difficulty=0&judgeStatus=0&rp=0&sourceUrl=%2Fexam%2Foj%3Fpage%3D1%26tab%3DSQL%25E7%25AF%2587%26topicId%3D298)）
    
-   （这里隐藏了一种情况：如果两个都是pkey，则选取最小的cardinality ）
+   对于等号join，并且其中一个参数是主键，那么这个join的cardinality(the number of tuples produced by)是不会大于**非**主键参数的cardinality的。举个例子，a.a_id=b.a_id，但是b的同一个a_id属性可能会在不同的tuple中出现，即重复a_id。比如b的t1有(0,12)，t2有(1,12)，字段分别是b的id和a_id。
+   
+   这里其实隐藏了一种情况：如果两个都是pkey，则选取最小的cardinality 
    
 * For **equality** joins when there is **no primary key**, it's hard to say much about what the size of the output
   is -- it could be the size of the product of the cardinalities of the tables (if both tables have the
   same value for all tuples) -- or it could be 0.  It's fine to make up a simple heuristic (say,
   <u>the size of the larger of the two tables</u>).
   
+  对于没有主键的等号join，很难估计这种情况下的cardinality，于是这里直接返回两个table cardinality中的最大的那个。
+  
 *  For **range** scans, it is similarly hard to say anything accurate about sizes.
    The size of the output should be proportional to
    the sizes of the inputs.  It is fine to assume that a fixed fraction
-   of the cross-product is emitted by range scans (say, 30%).  In general, the cost of a range
+   of the cross-product is emitted by range scans (say, **30%**).  In general, the cost of a range
    join should be larger than the cost of a non-primary key equality join of two tables
    of the same size.
 
@@ -337,7 +352,6 @@ While implementing your simple solution, you  should keep in mind the following:
 
 ***
 **Exercise 3:  Join Cost Estimation**
-
 
 The class <tt>JoinOptimizer.java</tt> includes all of the methods
 for ordering and computing costs of joins.  In this exercise, you
@@ -361,6 +375,7 @@ a join, specifically:
 
 After implementing these methods, you should be able to pass the unit
 tests <tt>estimateJoinCostTest</tt> and <tt>estimateJoinCardinality</tt> in <tt>JoinOptimizerTest.java</tt>.
+
 ***
 
 
@@ -372,6 +387,9 @@ expressed as a list of join nodes (e.g., predicates over two tables)
 as opposed to a list of relations to join as described in class.
 
 Translating the algorithm given in lecture to the join node list form mentioned above, an outline in pseudocode would be:
+
+所有长度为i的joinNode的组合。如length=3，则s为123 132 312 ...(123和213都是不同的不同的join顺序也有差异)。找出其中cost最少的
+
 ```
 1. j = set of join nodes
 2. for (i in 1...|j|):

@@ -248,7 +248,7 @@ public class JoinOptimizer {
         for (int len=1; len<=joins.size(); len++) {
             Set<Set<LogicalJoinNode>> sets = enumerateSubsets(joins, len); //all sets whose number of node is len
             for (Set<LogicalJoinNode> set : sets) {
-                CostCard bestPlan = new CostCard();
+                CostCard bestPlan = new CostCard();//当前length下的best plan
                 bestPlan.cost = Double.MAX_VALUE;
                 for (LogicalJoinNode logicalJoinNode : set) {
                     // subplan = optjoin(s')
@@ -480,6 +480,7 @@ public class JoinOptimizer {
             Map<String, Double> selectivities) {
 
         JFrame f = new JFrame("Join Plan for " + p.getQuery());
+        System.out.println("Join Plan for " + p.getQuery());
 
         // Set the default close operation for the window,
         // or else the program won't exit when clicking close button
@@ -588,6 +589,11 @@ public class JoinOptimizer {
         }
 
         f.pack();
+        try {
+            Thread.sleep(100000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
 
     }
 

@@ -96,7 +96,7 @@ public class LogFile {
 //    int pageSize;
     int totalRecords = 0; // for PatchTest //protected by this
 
-    final Map<Long,Long> tidToFirstLogRecord = new HashMap<>();
+    final Map<Long,Long> tidToFirstLogRecord = new HashMap<>();//每一个事务在log中开始的位置
 
     /** Constructor.
         Initialize and back the log file with the specified file.
@@ -467,14 +467,14 @@ public class LogFile {
                 * 从file结尾往前遍历，因为每一个log record的结束是一个8字节，用来记录每一个log record的开始offset
                 * 这样就可以避免处理checkpoint这类不知道具体大小的record了
                 * */
-                long start = tidToFirstLogRecord.get(tid.getId());
+                long start = tidToFirstLogRecord.get(tid.getId());//记录了每一个事务的在log中的开始位置，回滚的停止位置
                 raf.seek(raf.length()-8);//移动到上一个record的最后8字节，此位置记录了每个record的开始位置
                 long offset = raf.readLong();//读取每一个record的开始位置
                 while(offset>start){
                     raf.seek(offset);//start of each log record
                     int type = raf.readInt();
                     long transactionId = raf.readLong();
-                    if(tid.getId() == transactionId && type == UPDATE_RECORD) {
+                    if(tid.getId() == transactionId && type == UPDATE_RECORD) {//要回滚的事务，直接用before-image替换
                         Page beforeImage = readPageData(raf);
                         Database.getBufferPool().discardPage(beforeImage.getId());
                         Database.getCatalog().getDatabaseFile(beforeImage.getId().getTableId()).writePage(beforeImage);//rollback and persist
@@ -542,9 +542,11 @@ public class LogFile {
                         case UPDATE_RECORD://redo
                             readPageData(raf);
                             Page afterImage = readPageData(raf);
-                            Database.getCatalog().getDatabaseFile(afterImage.getId().getTableId()).writePage(afterImage);
+                            Database.getCatalog().getDatabaseFile(afterImage.getId().getTableId()).writePage(afterImage);//用after image替换
                             break;
                         case CHECKPOINT_RECORD:
+                            //该类型的record记录了到此为止存活的事务，但并没有指明这些事务的状态：提交、回滚、等.
+                            //于是暂时将他们都看作loser，在接下来的遍历中获取他们的状态
                             int nTrxs = raf.readInt();
                             for (int i = 0; i < nTrxs; i++) {
                                 long trx = raf.readLong();//record transaction id

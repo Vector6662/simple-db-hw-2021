@@ -266,23 +266,15 @@ public class BufferPool {
     private synchronized void flushPage(PageId pid) throws IOException {
         // some code goes here
         // not necessary for lab1
-        /*
-        * 可以看到最后一行直接会将page给落盘，不会等到事务提交，这也就是STEAL
-        * 为了保证一致性，本课程的实现没有采用undo log，而是采用了before-image和after-image。
-        * 调用的是下边logWrite()方法。回滚的时候就用before-image来覆盖之前磁盘中相应的page
-        * 注意这个代码里边，虽然追加了log，也STEAL了page，都是写磁盘了的，也就是都持久化了的，
-        * 但是事务还没有提交的！需要调用transactionComplete(true)之后才会提交事务，该方法内部会调用
-        * logFile的logCommit方法，其中第一行就是raf.writeInt(COMMIT_RECORD);即写下COMMIT记录，
-        * 这个时候才表明事务已经提交了
-        * */
         Page page = bufferedPages.get(pid);
         TransactionId dirtier = page.isDirty();
-        //写日志
+        //写日志，即提交事务
         if (dirtier != null) {
             Database.getLogFile().logWrite(dirtier, page.getBeforeImage(), page);//UPDATE类型的记录
-            Database.getLogFile().force();
+            Database.getLogFile().force();//提交
         }
-        //steal
+        //在事务提交之前，都没有将page落盘，即使在flushPages方法中，也只是进行了：page.setBeforeImage();，也没有刷盘，所以这里采用的是NO STEAL
+        //但是在事务提交之后，紧接着就进行了刷盘，于是这里采用的是FORCE
         page.markDirty(false, null);
         DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
         dbFile.writePage(page);
@@ -310,7 +302,7 @@ public class BufferPool {
     private synchronized void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
-        //todo 这里是一个大的优化点，可以实现一个lru、lru之类的
+        //todo 这里是一个大的优化点，可以实现一个lru、lru之类的。目前的实现比较简陋，直接遍历一遍buffer pool
         if (bufferedPages.size() < numPages)
             return;
         Iterator<Page> iter = bufferedPages.values().iterator();

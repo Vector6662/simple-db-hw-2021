@@ -114,7 +114,7 @@ public class Join extends Operator {
         // some code goes here
         // O(n^2)。这里有一个坑，每一次调用该方法要使用当前的t1，而不是child1.next()，因为当前的t1还没和剩下的child2比较完
         while (true) {
-            if (t1 == null) {
+            if (t1 == null) {//t1和child2所有的比较
                 if (child1.hasNext()) t1 = child1.next();
                 else return null;
             }

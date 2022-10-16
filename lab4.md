@@ -115,8 +115,7 @@ work as follows:
 *  Multiple transactions can have a shared lock on an object.
 *  Only one transaction may have an exclusive lock on an object.
 *  If transaction *t* is the **only** transaction holding a shared lock on
-   an object *o*, *t* may ***upgrade***
-   its lock on *o* to an exclusive lock.
+   an object *o*, *t* may ***upgrade*** its lock on *o* to an exclusive lock.（只有一个S锁，且这个锁就是事务自己，则可以进行锁升级）
 
 If a transaction requests a lock that cannot be immediately granted, your code
 should *block*, waiting for that lock to become available (i.e., be
